@@ -1,10 +1,13 @@
+use std::{process, thread, time};
+
 use crate::{
     data_registers::DataRegisters, display::Display, font::*, keypad::KeyPad, stack::Stack,
     timer::Timer,
 };
 
-const INSTRUCTIONS_PER_SECOND: usize = 700;
 const MEMORY_BYTES: usize = 4096;
+const FREQUENCY_HZ: usize = 700;
+const SLEEP_US: u64 = (1000 * 1000 / FREQUENCY_HZ) as u64;
 
 pub struct Emulator {
     display: Display,
@@ -38,11 +41,27 @@ impl Emulator {
         }
     }
 
-    pub fn run(&mut self) {}
-
-    fn fetch(&mut self) -> u16 {
-        0
+    pub fn run(&mut self) {
+        loop {
+            self.fetch();
+            self.execute();
+            thread::sleep(time::Duration::from_micros(SLEEP_US));
+        }
     }
 
-    fn execute(&self, _instruction: u16) {}
+    fn fetch(&mut self) {
+        let pc: usize = self.pc as usize;
+        self.i_reg = ((self.memory[pc] as u16) << 8) | self.memory[pc + 1] as u16;
+        self.pc += 2;
+    }
+
+    fn execute(&self) {
+        match self.i_reg {
+            0 => println!("Executing 0."),
+            _ => {
+                eprintln!("[Error]: Unknown instruction.");
+                process::exit(1);
+            }
+        }
+    }
 }
