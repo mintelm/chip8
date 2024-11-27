@@ -1,3 +1,4 @@
+mod font;
 mod stack;
 mod timer;
 
