@@ -10,5 +10,6 @@ mod timer;
 
 fn main() {
     let mut emulator = Emulator::new();
+    emulator.draw_full_font();
     emulator.run();
 }
