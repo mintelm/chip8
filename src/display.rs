@@ -1,14 +1,30 @@
+use minifb::{Window, WindowOptions};
+
 pub const DISPLAY_WIDTH: usize = 64;
 pub const DISPLAY_HEIGHT: usize = 32;
 
 pub struct Display {
-    pixels: [bool; DISPLAY_WIDTH * DISPLAY_HEIGHT],
+    buffer: [u32; DISPLAY_WIDTH * DISPLAY_HEIGHT],
+    window: Window,
 }
 
 impl Display {
     pub fn new() -> Display {
         Display {
-            pixels: [false; DISPLAY_WIDTH * DISPLAY_HEIGHT],
+            buffer: [0; DISPLAY_WIDTH * DISPLAY_HEIGHT],
+            window: Window::new(
+                "Chip8 Emulator",
+                DISPLAY_WIDTH,
+                DISPLAY_HEIGHT,
+                WindowOptions::default(),
+            )
+            .expect("Unable to create the window."),
         }
+    }
+
+    pub fn update(&mut self) {
+        self.window
+            .update_with_buffer(&self.buffer, DISPLAY_WIDTH, DISPLAY_HEIGHT)
+            .unwrap();
     }
 }

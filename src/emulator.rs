@@ -45,6 +45,7 @@ impl Emulator {
         loop {
             self.fetch();
             self.execute();
+            self.display.update();
             thread::sleep(time::Duration::from_micros(SLEEP_US));
         }
     }
