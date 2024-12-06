@@ -1,15 +1,14 @@
 use emulator::Emulator;
 
-mod display;
 mod emulator;
 mod font;
-mod instructions;
 mod keypad;
+mod screen;
 mod stack;
 mod timer;
 
 fn main() {
     let mut emulator = Emulator::new();
-    emulator.load_rom("ibm.ch8".to_owned());
+    emulator.load_rom("./roms/ibm.ch8");
     emulator.run();
 }

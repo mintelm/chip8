@@ -1,23 +1,23 @@
 use minifb::{Window, WindowOptions};
 
-const DISPLAY_WIDTH: usize = 64;
-const DISPLAY_HEIGHT: usize = 32;
+const SCREEN_WIDTH: usize = 64;
+const SCREEN_HEIGHT: usize = 32;
 const WHITE: u32 = u32::MAX;
 const BLACK: u32 = 0;
 
-pub struct Display {
-    buffer: [u32; DISPLAY_WIDTH * DISPLAY_HEIGHT],
+pub struct Screen {
+    buffer: [u32; SCREEN_WIDTH * SCREEN_HEIGHT],
     window: Window,
 }
 
-impl Display {
-    pub fn new() -> Display {
-        Display {
-            buffer: [0; DISPLAY_WIDTH * DISPLAY_HEIGHT],
+impl Screen {
+    pub fn new() -> Screen {
+        Screen {
+            buffer: [0; SCREEN_WIDTH * SCREEN_HEIGHT],
             window: Window::new(
                 "Chip8 Emulator",
-                DISPLAY_WIDTH,
-                DISPLAY_HEIGHT,
+                SCREEN_WIDTH,
+                SCREEN_HEIGHT,
                 WindowOptions::default(),
             )
             .expect("Unable to create the window."),
@@ -26,12 +26,12 @@ impl Display {
 
     pub fn update(&mut self) {
         self.window
-            .update_with_buffer(&self.buffer, DISPLAY_WIDTH, DISPLAY_HEIGHT)
+            .update_with_buffer(&self.buffer, SCREEN_WIDTH, SCREEN_HEIGHT)
             .unwrap();
     }
 
     pub fn draw_sprite(&mut self, x: usize, y: usize, sprite: &[u8]) {
-        let mut idx = (x % DISPLAY_WIDTH) + ((y % DISPLAY_HEIGHT) * DISPLAY_WIDTH);
+        let mut idx = (x % SCREEN_WIDTH) + ((y % SCREEN_HEIGHT) * SCREEN_WIDTH);
 
         for byte in sprite.iter() {
             for i in 0..u8::BITS {
@@ -47,12 +47,12 @@ impl Display {
                 idx += 1;
             }
             // Skip to next row for the next byte of the sprite.
-            idx += DISPLAY_WIDTH - u8::BITS as usize;
+            idx += SCREEN_WIDTH - u8::BITS as usize;
         }
     }
 
     pub fn clear(&mut self) {
-        self.buffer = [0; DISPLAY_WIDTH * DISPLAY_HEIGHT];
+        self.buffer = [0; SCREEN_WIDTH * SCREEN_HEIGHT];
     }
 }
 
@@ -60,21 +60,21 @@ impl Display {
 mod tests {
     use super::*;
 
-    fn assert_sprite(display: &Display, x: usize, y: usize, sprite: &[u8]) {
-        let mut idx = (x % DISPLAY_WIDTH) + ((y % DISPLAY_HEIGHT) * DISPLAY_WIDTH);
+    fn assert_sprite(screen: &Screen, x: usize, y: usize, sprite: &[u8]) {
+        let mut idx = (x % SCREEN_WIDTH) + ((y % SCREEN_HEIGHT) * SCREEN_WIDTH);
 
         for byte in sprite.iter() {
             for i in 0..u8::BITS {
                 let bit_mask = 0b1000_0000 >> i;
                 if byte & bit_mask != 0 {
-                    assert_eq!(display.buffer[idx], WHITE);
+                    assert_eq!(screen.buffer[idx], WHITE);
                 } else {
-                    assert_eq!(display.buffer[idx], BLACK);
+                    assert_eq!(screen.buffer[idx], BLACK);
                 }
                 idx += 1;
             }
             // Skip to next row for the next byte of the sprite.
-            idx += DISPLAY_WIDTH - u8::BITS as usize;
+            idx += SCREEN_WIDTH - u8::BITS as usize;
         }
     }
 
@@ -83,28 +83,28 @@ mod tests {
         let x = 0;
         let y = 0;
         let sprite = [0b1010_0101];
-        let mut display = Display::new();
+        let mut screen = Screen::new();
 
-        display.draw_sprite(x, y, &sprite);
+        screen.draw_sprite(x, y, &sprite);
 
-        assert_sprite(&display, x, y, &sprite);
-        for i in 8..display.buffer.len() {
-            assert_eq!(display.buffer[i], BLACK);
+        assert_sprite(&screen, x, y, &sprite);
+        for i in 8..screen.buffer.len() {
+            assert_eq!(screen.buffer[i], BLACK);
         }
     }
 
     #[test]
     fn draw_sprite_wraps() {
-        let x = DISPLAY_WIDTH;
-        let y = DISPLAY_HEIGHT;
+        let x = SCREEN_WIDTH;
+        let y = SCREEN_HEIGHT;
         let sprite = [0b1010_0101];
-        let mut display = Display::new();
+        let mut screen = Screen::new();
 
-        display.draw_sprite(x, y, &sprite);
+        screen.draw_sprite(x, y, &sprite);
 
-        assert_sprite(&display, x, y, &sprite);
-        for i in 8..display.buffer.len() {
-            assert_eq!(display.buffer[i], BLACK);
+        assert_sprite(&screen, x, y, &sprite);
+        for i in 8..screen.buffer.len() {
+            assert_eq!(screen.buffer[i], BLACK);
         }
     }
 
@@ -112,41 +112,41 @@ mod tests {
     fn draw_sprite_xors() {
         let x = 0;
         let y = 0;
-        let mut display = Display::new();
+        let mut screen = Screen::new();
         let sprite1 = [0b1111_0010];
         let sprite2 = [0b1000_0101];
-        let mut idx = (x % DISPLAY_WIDTH) + ((y % DISPLAY_HEIGHT) * DISPLAY_WIDTH);
+        let mut idx = (x % SCREEN_WIDTH) + ((y % SCREEN_HEIGHT) * SCREEN_WIDTH);
 
-        display.draw_sprite(x, y, &sprite1);
-        display.draw_sprite(x, y, &sprite2);
+        screen.draw_sprite(x, y, &sprite1);
+        screen.draw_sprite(x, y, &sprite2);
 
         let xored_sprite = sprite1[0] ^ sprite2[0];
         for i in 0..u8::BITS {
             let bit_mask = 0b1000_0000 >> i;
             if xored_sprite & bit_mask as u8 != 0 {
-                assert_eq!(display.buffer[idx], WHITE);
+                assert_eq!(screen.buffer[idx], WHITE);
             } else {
-                assert_eq!(display.buffer[idx], BLACK);
+                assert_eq!(screen.buffer[idx], BLACK);
             }
             idx += 1;
         }
-        for i in 8..display.buffer.len() {
-            assert_eq!(display.buffer[i], BLACK);
+        for i in 8..screen.buffer.len() {
+            assert_eq!(screen.buffer[i], BLACK);
         }
     }
 
     #[test]
     fn clear() {
-        let mut display = Display::new();
+        let mut screen = Screen::new();
 
-        for i in 0..display.buffer.len() {
-            display.buffer[i] = 0xCAFE;
+        for i in 0..screen.buffer.len() {
+            screen.buffer[i] = 0xCAFE;
         }
 
-        display.clear();
+        screen.clear();
 
-        for i in 0..display.buffer.len() {
-            assert_eq!(display.buffer[i], BLACK);
+        for i in 0..screen.buffer.len() {
+            assert_eq!(screen.buffer[i], BLACK);
         }
     }
 }

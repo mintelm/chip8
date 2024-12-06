@@ -1,21 +1,61 @@
 use std::{process, thread, time};
 
-use crate::{
-    display::Display,
-    font::*,
-    instructions::{instruction_matcher, Instruction},
-    keypad::KeyPad,
-    stack::Stack,
-    timer::Timer,
-};
+use crate::{font::*, keypad::KeyPad, screen::Screen, stack::Stack, timer::Timer};
+
+/// x is the second nibble. Used to lookup registers.
+macro_rules! get_x {
+    ($val:expr) => {
+        (($val & 0x0F00) >> 8) as usize
+    };
+}
+
+/// y is the third nibble. Used to lookup registers.
+macro_rules! get_y {
+    ($val:expr) => {
+        (($val & 0x00F0) >> 4) as usize
+    };
+}
+
+/// n is the fourth nibble. A 4 bit number.
+macro_rules! get_n {
+    ($val:expr) => {
+        $val & 0x000F
+    };
+}
+
+/// nn is the second byte. A 8 bit number.
+macro_rules! get_nn {
+    ($val:expr) => {
+        ($val & 0x00FF) as u8
+    };
+}
+
+/// nnn is the second nibble and the second byte. Typically a 12 bit memory address.
+macro_rules! get_nnn {
+    ($val:expr) => {
+        $val & 0x0FFF
+    };
+}
 
 const MEMORY_BYTES: usize = 4096;
 const FREQUENCY_HZ: usize = 700;
 const SLEEP_US: u64 = (1000 * 1000 / FREQUENCY_HZ) as u64;
 const REG_COUNT: usize = 16;
 
+enum Instruction {
+    CLS,
+    RET,
+    JP,
+    CALL,
+    LD,
+    ADD,
+    LDI,
+    DSPR,
+    NOOP,
+}
+
 pub struct Emulator {
-    display: Display,
+    screen: Screen,
     memory: [u8; MEMORY_BYTES],
     pc: u16,
     stack: Stack,
@@ -30,7 +70,7 @@ pub struct Emulator {
 impl Emulator {
     pub fn new() -> Emulator {
         Emulator {
-            display: Display::new(),
+            screen: Screen::new(),
             pc: 0x200, // Typical chip8 program start.
             d_regs: [0; REG_COUNT],
             memory: {
@@ -48,8 +88,8 @@ impl Emulator {
         }
     }
 
-    pub fn load_rom(&mut self, file: String) {
-        let rom = std::fs::read("./roms/".to_owned() + &file).unwrap();
+    pub fn load_rom(&mut self, file: &str) {
+        let rom = std::fs::read(&file).unwrap();
         let begin = self.pc as usize;
         let end = self.pc as usize + rom.len();
         self.memory[begin..end].copy_from_slice(&rom);
@@ -59,8 +99,25 @@ impl Emulator {
         loop {
             self.fetch();
             self.execute();
-            self.display.update();
+            self.screen.update();
             thread::sleep(time::Duration::from_micros(SLEEP_US));
+        }
+    }
+
+    fn get_instruction(&self) -> Instruction {
+        match self.instruction & 0xF000 {
+            0x0000 => match self.instruction {
+                0x00E0 => Instruction::CLS,
+                0x00EE => Instruction::RET,
+                _ => Instruction::NOOP,
+            },
+            0x1000 => Instruction::JP,
+            0x2000 => Instruction::CALL,
+            0x6000 => Instruction::LD,
+            0x7000 => Instruction::ADD,
+            0xA000 => Instruction::LDI,
+            0xD000 => Instruction::DSPR,
+            _ => Instruction::NOOP,
         }
     }
 
@@ -71,15 +128,15 @@ impl Emulator {
     }
 
     fn execute(&mut self) {
-        match instruction_matcher(self.instruction) {
+        match self.get_instruction() {
             Instruction::CLS => self.clear_screen(),
             Instruction::RET => self.return_subroutine(),
             Instruction::JP => self.jump(),
             Instruction::CALL => self.call_subroutine(),
             Instruction::LD => self.load(),
-            Instruction::ADDC => self.add(),
+            Instruction::ADD => self.add(),
             Instruction::LDI => self.load_i(),
-            Instruction::DSPR => self.display_sprite(),
+            Instruction::DSPR => self.draw_sprite(),
             Instruction::NOOP => {
                 eprintln!("[Error]: Unknown instruction.");
                 process::exit(1);
@@ -87,9 +144,9 @@ impl Emulator {
         }
     }
 
-    /// Clear the display.
+    /// Clear the screen.
     fn clear_screen(&mut self) {
-        self.display.clear();
+        self.screen.clear();
     }
 
     // Return from a subroutine.
@@ -97,58 +154,48 @@ impl Emulator {
         self.pc = self.stack.pop();
     }
 
-    /// Jump to address.
+    /// Jump to nnn.
     fn jump(&mut self) {
-        // Address is in bytes 2-4.
-        self.pc = self.instruction & 0x0FFF;
+        self.pc = get_nnn!(self.instruction);
     }
 
-    /// Call subroutine from location.
+    /// Call subroutine from nnn.
     fn call_subroutine(&mut self) {
         self.stack.push(self.pc);
-        // Location is in bytes 2-4.
-        self.pc = self.instruction & 0x0FFF as u16;
+        self.pc = get_nnn!(self.instruction);
     }
 
-    /// Load value into register.
+    /// Load nn into register x.
     fn load(&mut self) {
-        // Register index is in byte 2.
-        let idx = ((self.instruction & 0x0F00) >> 8) as usize;
-        // Value is in bytes 3-4.
-        let value = (self.instruction & 0x00FF) as u8;
+        let x = get_x!(self.instruction);
+        let nn = get_nn!(self.instruction);
 
-        self.d_regs[idx] = value;
+        self.d_regs[x] = nn;
     }
 
-    /// Add value to the value of register.
+    /// Add nn to register x.
     fn add(&mut self) {
-        // Register index is in byte 2.
-        let idx = ((self.instruction & 0x0F00) >> 8) as usize;
-        // Value is in bytes 3-4.
-        let value = (self.instruction & 0x00FF) as u8;
+        let x = get_x!(self.instruction);
+        let nn = get_nn!(self.instruction);
 
-        self.d_regs[idx] += value;
+        self.d_regs[x] += nn;
     }
 
-    /// Load value into i register.
+    /// Load nnn into register i.
     fn load_i(&mut self) {
-        // Value is in bytes 2-4.
-        self.i_reg = self.instruction & 0x0FFF;
+        self.i_reg = get_nnn!(self.instruction);
     }
 
-    /// Display sprite.
-    fn display_sprite(&mut self) {
-        let x_idx = ((self.instruction & 0x0F00) >> 8) as usize;
-        let y_idx = ((self.instruction & 0x00F0) >> 4) as usize;
-        let n = self.instruction & 0x000F;
-        let begin = (self.i_reg & 0x0FFF) as usize;
-        let end = ((self.i_reg & 0x0FFF) + n) as usize;
+    /// Draw n pixels tall sprite from register i at coordinates of register x, register y.
+    fn draw_sprite(&mut self) {
+        let x = get_x!(self.instruction);
+        let y = get_y!(self.instruction);
+        let n = get_n!(self.instruction);
+        let begin = self.i_reg as usize;
+        let end = (self.i_reg + n) as usize;
         let sprite = &self.memory[begin..end];
 
-        self.display.draw_sprite(
-            self.d_regs[x_idx].into(),
-            self.d_regs[y_idx].into(),
-            &sprite,
-        );
+        self.screen
+            .draw_sprite(self.d_regs[x].into(), self.d_regs[y].into(), &sprite);
     }
 }
