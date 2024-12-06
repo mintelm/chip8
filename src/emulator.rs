@@ -73,7 +73,9 @@ impl Emulator {
     fn execute(&mut self) {
         match instruction_matcher(self.instruction) {
             Instruction::CLS => self.clear_screen(),
+            Instruction::RET => self.return_subroutine(),
             Instruction::JP => self.jump(),
+            Instruction::CALL => self.call_subroutine(),
             Instruction::LD => self.load(),
             Instruction::ADDC => self.add(),
             Instruction::LDI => self.load_i(),
@@ -90,10 +92,22 @@ impl Emulator {
         self.display.clear();
     }
 
+    // Return from a subroutine.
+    fn return_subroutine(&mut self) {
+        self.pc = self.stack.pop();
+    }
+
     /// Jump to address.
     fn jump(&mut self) {
         // Address is in bytes 2-4.
         self.pc = self.instruction & 0x0FFF;
+    }
+
+    /// Call subroutine from location.
+    fn call_subroutine(&mut self) {
+        self.stack.push(self.pc);
+        // Location is in bytes 2-4.
+        self.pc = self.instruction & 0x0FFF as u16;
     }
 
     /// Load value into register.
