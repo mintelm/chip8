@@ -47,7 +47,14 @@ enum Instruction {
     RET,
     JP,
     CALL,
+    SE,
+    SNE,
+    SER,
     LD,
+    LDR,
+    OR,
+    AND,
+    XOR,
     ADD,
     LDI,
     DSPR,
@@ -113,8 +120,18 @@ impl Emulator {
             },
             0x1000 => Instruction::JP,
             0x2000 => Instruction::CALL,
+            0x3000 => Instruction::SE,
+            0x4000 => Instruction::SNE,
+            0x5000 => Instruction::SER,
             0x6000 => Instruction::LD,
             0x7000 => Instruction::ADD,
+            0x8000 => match self.instruction & 0xF00F {
+                0x8000 => Instruction::LDR,
+                0x8001 => Instruction::OR,
+                0x8002 => Instruction::AND,
+                0x8003 => Instruction::XOR,
+                _ => Instruction::NOOP,
+            },
             0xA000 => Instruction::LDI,
             0xD000 => Instruction::DSPR,
             _ => Instruction::NOOP,
@@ -133,8 +150,15 @@ impl Emulator {
             Instruction::RET => self.return_subroutine(),
             Instruction::JP => self.jump(),
             Instruction::CALL => self.call_subroutine(),
+            Instruction::SE => self.skip_equal(),
+            Instruction::SNE => self.skip_not_equal(),
+            Instruction::SER => self.skip_equal_regs(),
             Instruction::LD => self.load(),
             Instruction::ADD => self.add(),
+            Instruction::LDR => self.load_reg(),
+            Instruction::OR => self.or(),
+            Instruction::AND => self.and(),
+            Instruction::XOR => self.xor(),
             Instruction::LDI => self.load_i(),
             Instruction::DSPR => self.draw_sprite(),
             Instruction::NOOP => {
@@ -165,6 +189,36 @@ impl Emulator {
         self.pc = get_nnn!(self.instruction);
     }
 
+    /// Skip next instruction if register x is equal to nn.
+    fn skip_equal(&mut self) {
+        let x = get_x!(self.instruction);
+        let nn = get_nn!(self.instruction);
+
+        if self.d_regs[x] == nn {
+            self.pc += 2;
+        }
+    }
+
+    /// Skip next instruction if register x is not equal to nn.
+    fn skip_not_equal(&mut self) {
+        let x = get_x!(self.instruction);
+        let nn = get_nn!(self.instruction);
+
+        if self.d_regs[x] != nn {
+            self.pc += 2;
+        }
+    }
+
+    /// Skip next instruction if register x is equal to nn.
+    fn skip_equal_regs(&mut self) {
+        let x = get_x!(self.instruction);
+        let y = get_y!(self.instruction);
+
+        if self.d_regs[x] == self.d_regs[y] {
+            self.pc += 2;
+        }
+    }
+
     /// Load nn into register x.
     fn load(&mut self) {
         let x = get_x!(self.instruction);
@@ -181,6 +235,38 @@ impl Emulator {
         self.d_regs[x] += nn;
     }
 
+    /// Load register y into register x.
+    fn load_reg(&mut self) {
+        let x = get_x!(self.instruction);
+        let y = get_y!(self.instruction);
+
+        self.d_regs[x] = self.d_regs[y];
+    }
+
+    /// Set register x to register x OR register y.
+    fn or(&mut self) {
+        let x = get_x!(self.instruction);
+        let y = get_y!(self.instruction);
+
+        self.d_regs[x] |= self.d_regs[y];
+    }
+
+    /// Set register x to register x AND register y.
+    fn and(&mut self) {
+        let x = get_x!(self.instruction);
+        let y = get_y!(self.instruction);
+
+        self.d_regs[x] &= self.d_regs[y];
+    }
+
+    /// Set register x to register x XOR register y.
+    fn xor(&mut self) {
+        let x = get_x!(self.instruction);
+        let y = get_y!(self.instruction);
+
+        self.d_regs[x] ^= self.d_regs[y];
+    }
+
     /// Load nnn into register i.
     fn load_i(&mut self) {
         self.i_reg = get_nnn!(self.instruction);
@@ -195,6 +281,7 @@ impl Emulator {
         let end = (self.i_reg + n) as usize;
         let sprite = &self.memory[begin..end];
 
+        // TODO: set register F if any pixel was 'erased'.
         self.screen
             .draw_sprite(self.d_regs[x].into(), self.d_regs[y].into(), &sprite);
     }
